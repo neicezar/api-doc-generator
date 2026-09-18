@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: apidocgen-postgres
+    environment:
+      POSTGRES_DB: apidocgen
+      POSTGRES_USER: apidocgen
+      POSTGRES_PASSWORD: apidocgen
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apidocgen"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: apidocgen-rabbitmq
+    ports:
+      - "5672:5672"   # protocolo AMQP (usado pela aplicação)
+      - "15672:15672" # painel de administração web (http://localhost:15672)
+    environment:
+      RABBITMQ_DEFAULT_USER: apidocgen
+      RABBITMQ_DEFAULT_PASS: apidocgen
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

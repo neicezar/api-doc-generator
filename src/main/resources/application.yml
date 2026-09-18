@@ -1,0 +1,35 @@
+server:
+port: 8080
+
+spring:
+application:
+name: api-doc-generator
+
+datasource:
+url: jdbc:postgresql://localhost:5432/apidocgen
+username: apidocgen
+password: apidocgen
+driver-class-name: org.postgresql.Driver
+
+jpa:
+hibernate:
+# 'update' é conveniente em desenvolvimento, mas numa entrega
+# mais madura o ideal é usar Flyway/Liquibase para versionar o schema.
+ddl-auto: update
+show-sql: true
+properties:
+hibernate:
+format_sql: true
+dialect: org.hibernate.dialect.PostgreSQLDialect
+
+rabbitmq:
+host: localhost
+port: 5672
+username: apidocgen
+password: apidocgen
+
+# Chave de API nunca fica hardcoded aqui — vem de variável de ambiente.
+# Ex: export OPENAI_API_KEY=sk-...
+openai:
+api-key: ${OPENAI_API_KEY}
+model: gpt-4o-mini
