@@ -1,11 +1,8 @@
 package com.neibarbosa.api_doc_generator.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-
+import lombok.*;
+import jakarta.persistence.Id;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -15,10 +12,10 @@ import java.util.UUID;
 @Setter
 @AllArgsConstructor
 @Builder
-
+@NoArgsConstructor
 
 public class Tarefa {
-    @id
+    @Id
     @GeneratedValue (strategy = GenerationType.IDENTITY)
     private Long id;
 
