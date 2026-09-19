@@ -5,6 +5,7 @@ import com.neibarbosa.api_doc_generator.dto.TarefaResponse;
 import com.neibarbosa.api_doc_generator.entity.Tarefa;
 import com.neibarbosa.api_doc_generator.exception.ProvedorNaoSuportadoException;
 import com.neibarbosa.api_doc_generator.exception.TarefaNaoEncontradaException;
+import com.neibarbosa.api_doc_generator.messaging.TarefaMensagemPublisher;
 import com.neibarbosa.api_doc_generator.provedor.ProvedorRepositorio;
 import com.neibarbosa.api_doc_generator.repository.TarefaRepository;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ import java.util.UUID;
 public class TarefaService{
     private final TarefaRepository tarefaRepository;
     private final List<ProvedorRepositorio> provedores;
+    private final TarefaMensagemPublisher tarefaMensagemPublisher;
 
     public TarefaResponse criarTarefa(CriarTarefaRequest request){
         ProvedorRepositorio provedor = localizarProvedor(request.urlRepositorio());
@@ -28,6 +30,8 @@ public class TarefaService{
                 .build();
 
         Tarefa tarefaSalva = tarefaRepository.save(tarefa);
+
+        tarefaMensagemPublisher.publicarNovaTarefa(tarefaSalva.getCodigo());
 
         return TarefaResponse.fromEntity(tarefaSalva);
     }
