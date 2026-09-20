@@ -1,5 +1,7 @@
 package com.neibarbosa.api_doc_generator.extraction;
 
+import org.springframework.stereotype.Component;
+
 import java.util.List;
 import java.util.Set;
 
@@ -8,6 +10,7 @@ import java.util.Set;
  * sinais, do mais forte para o mais fraco — a mesma estratégia
  * definida no planejamento do projeto:
  */
+@Component
 public class IdentificadorDeCamada {
 
 

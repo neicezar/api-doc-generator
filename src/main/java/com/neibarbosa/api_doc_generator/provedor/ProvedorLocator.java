@@ -19,7 +19,7 @@ import java.util.List;
 public class ProvedorLocator {
     private final List<ProvedorRepositorio> provedores;
 
-    public ProvedorRepositorio localizador (String urlRepositorio){
+    public ProvedorRepositorio localizar (String urlRepositorio){
         return provedores.stream()
                 .filter(p -> p.suporta(urlRepositorio))
                 .findFirst()

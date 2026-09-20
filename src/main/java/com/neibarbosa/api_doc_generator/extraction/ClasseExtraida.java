@@ -12,6 +12,7 @@ public record ClasseExtraida(
         String nomePacote,
         String nomeClasse,
         CamadaClasse camada,
-        List<String> anotacoesDeClasse
+        List<String> anotacoesDeClasse,
+        List<MetodoExtraido> metodos
 ) {
 }

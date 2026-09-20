@@ -21,7 +21,9 @@ public class GitHubProvedor implements ProvedorRepositorio {
             "^https://github\\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/?$"
     );
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     @Override
     public boolean suporta(String urlRepositorio){
@@ -31,43 +33,43 @@ public class GitHubProvedor implements ProvedorRepositorio {
     @Override
     public InputStream baixarRepositorio(String urlRepositorio, String tokenAcesso) throws IOException {
         Matcher matcher = URL_GITHUB.matcher(urlRepositorio);
-        if (!matcher.matches()){
-            throw new IllegalArgumentException("URL do GitHub em formato inesperado: " + urlRepositorio);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException(
+                    "URL do GitHub em formato inesperado: " + urlRepositorio
+            );
         }
-        String owner = matcher.group(1);
-        String repository = matcher.group(2);
 
-        String zipballUrl = " https://api.github.com/repos/%s/%s/zipball/HEAD"
-                .formatted(owner, repository);
+        String owner = matcher.group(1);
+        String repositorio = matcher.group(2);
+
+        String zipballUrl = "https://api.github.com/repos/" + owner + "/" + repositorio + "/zipball/HEAD";
 
         HttpRequest.Builder requestBuilder = HttpRequest.newBuilder()
                 .uri(URI.create(zipballUrl))
                 .header("Accept", "application/vnd.github+json")
                 .GET();
 
-        if (tokenAcesso != null && !tokenAcesso.isBlank()){
-            requestBuilder.header("Authorization", "Bearer "+tokenAcesso);
+        if (tokenAcesso != null && !tokenAcesso.isBlank()) {
+            requestBuilder.header("Authorization", "Bearer " + tokenAcesso);
         }
 
         try {
-            HttpResponse<InputStream> response = httpClient.send (
+            HttpResponse<InputStream> response = httpClient.send(
                     requestBuilder.build(),
                     HttpResponse.BodyHandlers.ofInputStream()
             );
 
-            if (response.statusCode() != 200){
+            if (response.statusCode() != 200) {
                 throw new IOException(
-                        "Falha ao baixar repositório do GitHub. Status HTTP:" + response.statusCode()
+                        "Falha ao baixar repositório do GitHub. Status HTTP: " + response.statusCode()
                 );
             }
 
             return response.body();
-
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("Download do repositório interrompido", e);
         }
-
     }
 
 }
