@@ -15,7 +15,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -53,7 +55,25 @@ public class ExtratorDeCodigo {
             }
         }
 
-        return classesExtraidas;
+        return deduplicarPorNomeCompleto(classesExtraidas);
+    }
+
+    /**
+     * Alguns repositórios (principalmente tutoriais, como os "guides"
+     * do próprio Spring) mantêm mais de uma pasta com cópias dos
+     * mesmos arquivos-fonte (ex: "initial/" e "complete/"). Isso faz
+     * a mesma classe ser encontrada mais de uma vez — o que é correto
+     * do ponto de vista do repositório, mas indesejável na
+     * documentação final, que não deveria repetir a mesma classe.
+     * Mantém a primeira ocorrência encontrada, descartando as demais.
+     */
+    private List<ClasseExtraida> deduplicarPorNomeCompleto(List<ClasseExtraida> classes) {
+        Map<String, ClasseExtraida> vistos = new LinkedHashMap<>();
+        for (ClasseExtraida classe : classes) {
+            String nomeCompleto = classe.nomePacote() + "." + classe.nomeClasse();
+            vistos.putIfAbsent(nomeCompleto, classe);
+        }
+        return new ArrayList<>(vistos.values());
     }
 
     private String lerConteudoDoArquivo(ZipInputStream zis) throws IOException {
