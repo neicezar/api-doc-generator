@@ -33,3 +33,9 @@ spring:
 openai:
   api-key: ${OPENAI_API_KEY}
   model: gpt-4o-mini
+
+app:
+  # Limite de classes para geração de documentação.
+  # Projetos acima desse limite são rejeitados para evitar
+  # custo excessivo de API. Ajuste conforme necessário.
+  limite-maximo-classes: 400

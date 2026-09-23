@@ -8,18 +8,29 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Orquestra a geração da documentação final usando o padrão map-reduce
- * definido no planejamento do projeto:
+ * Orquestra a geração da documentação final usando um pipeline de
+ * 4 etapas inspirado no padrão map-reduce:
  *
- * MAP: cada classe extraída vira um resumo curto e independente
- * (evita mandar o repositório inteiro numa única chamada — problema
- * de "lost in the middle" em contextos muito longos).
+ * ETAPA 0 — Detecta a arquitetura do projeto (camadas, hexagonal, etc.)
+ *            a partir dos nomes de pacote e classes, gerando um contexto
+ *            que guia as etapas seguintes.
  *
- * REDUCE: os resumos (já compactos) são consolidados numa única
- * chamada final, que gera a documentação completa em Markdown.
+ * ETAPA 1 — MAP: resume cada classe individualmente (uma chamada por
+ *            classe), preservando os detalhes técnicos que as etapas
+ *            seguintes precisarão.
+ *
+ * ETAPA 2 — REDUCE por pacote: documenta cada pacote com profundidade,
+ *            recebendo o contexto da arquitetura (etapa 0) + um resumo
+ *            compacto de todos os pacotes (para entender o papel de
+ *            cada grupo no sistema) + os resumos detalhados das classes
+ *            do pacote que está sendo documentado naquele momento.
+ *
+ * ETAPA 3 — CONSOLIDAÇÃO final: monta o documento completo recebendo
+ *            o contexto da arquitetura + as documentações de cada pacote.
  */
 @Service
 @RequiredArgsConstructor
@@ -28,19 +39,73 @@ public class GeradorDeDocumentacaoService {
     private final LLMClient llmClient;
 
     public String gerarDocumentacao(String urlRepositorio, List<ClasseExtraida> classes) {
-        List<String> resumos = mapear(classes);
-        return reduzir(urlRepositorio, resumos);
+        // Agrupa por pacote antes de qualquer chamada à LLM
+        Map<String, List<ClasseExtraida>> porPacote = classes.stream()
+                .collect(Collectors.groupingBy(
+                        c -> c.nomePacote().isBlank() ? "(raiz)" : c.nomePacote(),
+                        Collectors.toList()
+                ));
+
+        // Etapa 0: detecta a arquitetura do projeto
+        String contextoArquitetura = detectarArquitetura(porPacote);
+
+        // Etapa 1: resume cada classe (map individual)
+        List<PacoteDocumentado> pacotes = porPacote.entrySet().stream()
+                .map(entry -> {
+                    List<String> resumos = entry.getValue().stream()
+                            .map(this::resumirClasse)
+                            .collect(Collectors.toList());
+                    return PacoteDocumentado.semDocumentacao(entry.getKey(), entry.getValue(), resumos);
+                })
+                .collect(Collectors.toList());
+
+        // Monta o resumo compacto de todos os pacotes (contexto global)
+        String resumoGlobalDePacotes = pacotes.stream()
+                .map(PacoteDocumentado::resumoCompacto)
+                .collect(Collectors.joining("\n"));
+
+        // Etapa 2: documenta cada pacote com o contexto completo
+        List<PacoteDocumentado> pacotesDocumentados = pacotes.stream()
+                .map(p -> p.comDocumentacao(
+                        documentarPacote(p, contextoArquitetura, resumoGlobalDePacotes)
+                ))
+                .collect(Collectors.toList());
+
+        // Etapa 3: consolida tudo no documento final
+        return consolidar(urlRepositorio, contextoArquitetura, pacotesDocumentados);
     }
 
-    /**
-     * Etapa MAP: uma chamada de LLM por classe, gerando um resumo
-     * curto e independente do que aquela classe faz.
-     */
-    private List<String> mapear(List<ClasseExtraida> classes) {
-        return classes.stream()
-                .map(this::resumirClasse)
-                .collect(Collectors.toList());
+    // ── Etapa 0 ──────────────────────────────────────────────────────────────
+
+    private String detectarArquitetura(Map<String, List<ClasseExtraida>> porPacote) {
+        String listaDePacotes = porPacote.entrySet().stream()
+                .map(entry -> "Pacote '%s': %s".formatted(
+                        entry.getKey(),
+                        entry.getValue().stream()
+                                .map(c -> "%s (%s)".formatted(c.nomeClasse(), c.camada()))
+                                .collect(Collectors.joining(", "))
+                ))
+                .collect(Collectors.joining("\n"));
+
+        String prompt = """
+                Com base na lista de pacotes e classes abaixo, identifique
+                qual padrão arquitetural esse projeto Java segue (ex: camadas
+                tradicionais controller/service/repository, hexagonal/ports-and-adapters,
+                MVC, CQRS, ou outro) e explique brevemente o papel de cada pacote
+                dentro dessa arquitetura.
+
+                Responda em no máximo um parágrafo mais uma lista de bullets
+                (um por pacote), de forma técnica e objetiva.
+                Não inclua saudação nem comentário fora dessa descrição.
+
+                Pacotes e classes do projeto:
+                %s
+                """.formatted(listaDePacotes);
+
+        return llmClient.gerarTexto(prompt);
     }
+
+    // ── Etapa 1 ──────────────────────────────────────────────────────────────
 
     private String resumirClasse(ClasseExtraida classe) {
         String prompt = """
@@ -61,15 +126,12 @@ public class GeradorDeDocumentacaoService {
 
                 Regras obrigatórias:
                 - Baseie-se EXCLUSIVAMENTE nas informações fornecidas abaixo.
-                  Não invente métodos, campos ou comportamentos que não
-                  estejam listados.
-                - Responda APENAS com o resumo em si — sem saudação, sem
-                  introdução ("Claro!", "Aqui está...", etc.), sem comentário
-                  final, sem markdown de bloco de código.
+                - Responda APENAS com o resumo em si, sem saudação nem
+                  comentário final.
 
                 Pacote: %s
                 Classe: %s
-                Camada identificada: %s
+                Camada: %s
                 Anotações: %s
                 Campos: %s
                 Métodos públicos: %s
@@ -87,10 +149,110 @@ public class GeradorDeDocumentacaoService {
         );
     }
 
+    // ── Etapa 2 ──────────────────────────────────────────────────────────────
+
+    private String documentarPacote(
+            PacoteDocumentado pacote,
+            String contextoArquitetura,
+            String resumoGlobalDePacotes
+    ) {
+        String prompt = """
+                Você está documentando o pacote '%s' de uma API Java.
+
+                CONTEXTO ARQUITETURAL DO PROJETO:
+                %s
+
+                VISÃO GERAL DE TODOS OS PACOTES (para entender o papel de
+                cada grupo no sistema — não detalhe esses outros pacotes,
+                só use como contexto):
+                %s
+
+                CLASSES DESTE PACOTE (detalhe completo — documente todas):
+                %s
+
+                Com base nisso, gere a documentação deste pacote em Markdown,
+                incluindo:
+                - Uma descrição do papel deste pacote na arquitetura
+                - Para controladores: os endpoints que expõe, com parâmetros
+                  e exemplos de requisição/resposta usando os campos reais
+                - Para outras classes: campos e métodos relevantes
+
+                Regras:
+                - Use EXCLUSIVAMENTE as informações fornecidas. Não invente
+                  campos, endpoints ou comportamentos.
+                - A estrutura dos exemplos deve ser real; os valores podem
+                  ser ilustrativos e plausíveis.
+                - Resposta somente em Markdown, sem saudação nem comentário
+                  final fora do conteúdo.
+                """.formatted(
+                pacote.nomePacote(),
+                contextoArquitetura,
+                resumoGlobalDePacotes,
+                String.join("\n\n", pacote.resumosDasClasses())
+        );
+
+        return llmClient.gerarTexto(prompt);
+    }
+
+    // ── Etapa 3 ──────────────────────────────────────────────────────────────
+
+    private String consolidar(
+            String urlRepositorio,
+            String contextoArquitetura,
+            List<PacoteDocumentado> pacotes
+    ) {
+        String documentacoesPorPacote = pacotes.stream()
+                .map(p -> "## Pacote: %s\n\n%s".formatted(p.nomePacote(), p.documentacao()))
+                .collect(Collectors.joining("\n\n---\n\n"));
+
+        String prompt = """
+                Consolide as documentações de pacote abaixo em um documento
+                técnico final e coerente sobre a API do repositório %s.
+
+                CONTEXTO ARQUITETURAL (use para manter coerência):
+                %s
+
+                DOCUMENTAÇÕES POR PACOTE:
+                %s
+
+                Gere o documento final em Markdown com esta estrutura:
+
+                # Documentação Técnica — %s
+
+                ## Visão Arquitetural
+                (síntese de como as camadas se relacionam, baseada no
+                contexto arquitetural acima)
+
+                ## Guia de Endpoints
+                (consolide TODOS os endpoints de todos os pacotes de
+                controller, com parâmetros e exemplos)
+
+                ## Documentação Técnica
+                (uma subseção por pacote, com o conteúdo já documentado
+                acima — reorganize se necessário para melhorar a coerência,
+                mas não invente informação nova)
+
+                Regras:
+                - Comece diretamente com "# Documentação Técnica — %s".
+                - Não inclua saudação, introdução ou comentário fora do
+                  documento. Blocos de código JSON são permitidos e esperados.
+                - Não invente nenhuma informação que não esteja nas
+                  documentações de pacote acima.
+                """.formatted(
+                urlRepositorio,
+                contextoArquitetura,
+                documentacoesPorPacote,
+                urlRepositorio,
+                urlRepositorio
+        );
+
+        return llmClient.gerarTexto(prompt);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
     private String formatarCampos(List<CampoExtraido> campos) {
-        if (campos.isEmpty()) {
-            return "(nenhum campo encontrado)";
-        }
+        if (campos.isEmpty()) return "(nenhum campo encontrado)";
         return campos.stream()
                 .map(c -> "%s: %s".formatted(c.nome(), c.tipo()))
                 .collect(Collectors.joining(", "));
@@ -106,71 +268,14 @@ public class GeradorDeDocumentacaoService {
         String parametros = metodo.parametros().stream()
                 .map(this::formatarParametro)
                 .collect(Collectors.joining(", "));
-
         String anotacoes = metodo.anotacoes().isEmpty() ? "" : " " + metodo.anotacoes();
-
-        return "%s(%s): %s%s".formatted(
-                metodo.nome(), parametros, metodo.tipoRetorno(), anotacoes
-        );
+        return "%s(%s): %s%s".formatted(metodo.nome(), parametros, metodo.tipoRetorno(), anotacoes);
     }
 
     private String formatarParametro(ParametroExtraido parametro) {
         String anotacoes = parametro.anotacoes().isEmpty()
                 ? ""
                 : String.join(" ", parametro.anotacoes()) + " ";
-
         return "%s%s %s".formatted(anotacoes, parametro.tipo(), parametro.nome());
-    }
-
-    /**
-     * Etapa REDUCE: uma única chamada final, recebendo os resumos já
-     * compactados (não o código bruto de novo), pedindo a
-     * documentação consolidada do projeto inteiro.
-     */
-    private String reduzir(String urlRepositorio, List<String> resumos) {
-        String prompt = """
-                Você é um gerador de documentação técnica de APIs.
-                Com base nos resumos de classes abaixo (extraídos do repositório %s),
-                gere uma documentação completa em Markdown com três seções:
-
-                1. "## Visão Arquitetural" — como as camadas se relacionam
-                2. "## Guia de Endpoints" — para CADA endpoint exposto pelos
-                   controllers, documente:
-                   - método HTTP e path (ex: `GET /greeting`)
-                   - parâmetros aceitos, com nome, tipo, se é obrigatório e
-                     valor padrão quando houver
-                   - um exemplo de requisição
-                   - um exemplo de resposta em JSON, usando os campos reais
-                     do objeto retornado
-                3. "## Documentação Técnica" — detalhamento por classe, uma
-                   subseção "### NomeDaClasse" para CADA classe listada abaixo,
-                   incluindo seus campos (nome e tipo) quando houver
-
-                Regras obrigatórias:
-                - Use EXCLUSIVAMENTE as classes e informações listadas abaixo.
-                  Nunca invente classes, métodos, campos ou endpoints que não
-                  estejam nos resumos.
-                - Sobre os exemplos: a ESTRUTURA deve ser sempre real (só os
-                  campos e parâmetros que existem de fato nos resumos); apenas
-                  os VALORES dentro dela podem ser ilustrativos e plausíveis.
-                  Nunca acrescente um campo ao exemplo que não exista na classe.
-                - Se não houver nenhum controller nos resumos, escreva na seção
-                  de endpoints que o repositório não expõe endpoints REST, em
-                  vez de inventar algum.
-                - A resposta deve conter APENAS o Markdown da documentação,
-                  começando diretamente com "# Documentação Técnica — %s".
-                  Não inclua saudação, introdução, comentário final, nem
-                  envolva a resposta inteira em um bloco de código markdown
-                  (não use ``` no início/fim do documento). Blocos de código
-                  para os exemplos de JSON/requisição são permitidos e
-                  esperados.
-
-                Resumos das classes (%d classes no total):
-                %s
-                """.formatted(
-                urlRepositorio, urlRepositorio, resumos.size(), String.join("\n\n", resumos)
-        );
-
-        return llmClient.gerarTexto(prompt);
     }
 }

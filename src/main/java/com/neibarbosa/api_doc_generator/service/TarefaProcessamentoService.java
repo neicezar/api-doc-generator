@@ -13,6 +13,7 @@ import com.neibarbosa.api_doc_generator.service.llm.GeradorDeDocumentacaoService
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
@@ -45,6 +46,9 @@ public class TarefaProcessamentoService {
     private final ProvedorLocator provedorLocator;
     private final ExtratorDeCodigo extratorDeCodigo;
     private final GeradorDeDocumentacaoService geradorDeDocumentacaoService;
+
+    @Value("${app.limite-maximo-classes:400}")
+    private int limiteMaximoClasses;
 
     public void processar(UUID codigo) {
         Tarefa tarefa = tarefaRepository.findByCodigo(codigo)
@@ -80,6 +84,24 @@ public class TarefaProcessamentoService {
             log.info(
                     "Extração concluída para tarefa {}: {} classes encontradas — {}",
                     tarefa.getCodigo(), classes.size(), contagemPorCamada
+            );
+
+            if (classes.size() > limiteMaximoClasses) {
+                throw new IllegalArgumentException(
+                        "Repositório com %d classes excede o limite configurado de %d. "
+                                .formatted(classes.size(), limiteMaximoClasses)
+                                + "Ajuste 'app.limite-maximo-classes' no application.yml "
+                                + "ou use um repositório menor."
+                );
+            }
+
+            log.info(
+                    "Iniciando geração de documentação para tarefa {} — "
+                            + "estimativa de {} chamadas à LLM (1 arquitetura + {} classes + {} pacotes + 1 consolidação)",
+                    tarefa.getCodigo(),
+                    1 + classes.size() + contagemPorCamada.size() + 1,
+                    classes.size(),
+                    contagemPorCamada.size()
             );
 
             String documentacao = geradorDeDocumentacaoService.gerarDocumentacao(
