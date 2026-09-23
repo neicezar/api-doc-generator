@@ -46,6 +46,7 @@ public class TarefaProcessamentoService {
     private final ProvedorLocator provedorLocator;
     private final ExtratorDeCodigo extratorDeCodigo;
     private final GeradorDeDocumentacaoService geradorDeDocumentacaoService;
+    private final SseEmitterService sseEmitterService;
 
     @Value("${app.limite-maximo-classes:400}")
     private int limiteMaximoClasses;
@@ -62,6 +63,7 @@ public class TarefaProcessamentoService {
             tarefa.setMensagemErro(mensagemDeErroSegura(ex));
             tarefa.setDataFim(LocalDateTime.now());
             tarefaRepository.save(tarefa);
+            sseEmitterService.notificar(tarefa.getCodigo(), StatusTarefa.FALHOU, mensagemDeErroSegura(ex));
         }
     }
 
@@ -69,12 +71,14 @@ public class TarefaProcessamentoService {
         tarefa.setStatus(StatusTarefa.BAIXANDO);
         tarefa.setDataInicio(LocalDateTime.now());
         tarefaRepository.save(tarefa);
+        sseEmitterService.notificar(tarefa.getCodigo(), StatusTarefa.BAIXANDO, "Baixando repositório...");
 
         ProvedorRepositorio provedor = provedorLocator.localizar(tarefa.getUrlRepositorio());
 
         try (InputStream zipStream = provedor.baixarRepositorio(tarefa.getUrlRepositorio(), null)) {
             tarefa.setStatus(StatusTarefa.EXTRAINDO);
             tarefaRepository.save(tarefa);
+            sseEmitterService.notificar(tarefa.getCodigo(), StatusTarefa.EXTRAINDO, "Extraindo estrutura do código...");
 
             List<ClasseExtraida> classes = extratorDeCodigo.extrair(zipStream);
 
@@ -104,6 +108,10 @@ public class TarefaProcessamentoService {
                     contagemPorCamada.size()
             );
 
+            sseEmitterService.notificar(tarefa.getCodigo(), StatusTarefa.GERANDO,
+                    "Gerando documentação via LLM — estimativa de %d chamadas..."
+                            .formatted(1 + classes.size() + contagemPorCamada.size() + 1));
+
             String documentacao = geradorDeDocumentacaoService.gerarDocumentacao(
                     tarefa.getUrlRepositorio(), classes
             );
@@ -113,9 +121,9 @@ public class TarefaProcessamentoService {
             tarefa.setStatus(StatusTarefa.CONCLUIDO);
             tarefa.setUrlArtefato(caminhoArquivo);
             tarefa.setDataFim(LocalDateTime.now());
+            tarefaRepository.save(tarefa);
+            sseEmitterService.notificar(tarefa.getCodigo(), StatusTarefa.CONCLUIDO, caminhoArquivo);
         }
-
-        tarefaRepository.save(tarefa);
     }
 
     /**
