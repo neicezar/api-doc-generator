@@ -17,7 +17,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.UUID;
 
 @RestController
@@ -74,5 +77,29 @@ public class TarefaController {
     @GetMapping(value = "/{codigo}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter acompanharTarefa(@PathVariable UUID codigo) {
         return sseEmitterService.registrar(codigo);
+    }
+
+    /**
+     * Retorna o conteúdo Markdown da documentação gerada para uma
+     * tarefa concluída. Usado pelo frontend para renderizar e oferecer
+     * download do documento.
+     */
+    @GetMapping(value = "/{codigo}/documento", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<String> buscarDocumento(@PathVariable UUID codigo) {
+        Path arquivo = Path.of("documentos-gerados", codigo + ".md");
+
+        if (!Files.exists(arquivo)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        try {
+            String conteudo = Files.readString(arquivo);
+            return ResponseEntity.ok()
+                    .header("Content-Disposition",
+                            "attachment; filename=\"documentacao-" + codigo + ".md\"")
+                    .body(conteudo);
+        } catch (IOException ex) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }
