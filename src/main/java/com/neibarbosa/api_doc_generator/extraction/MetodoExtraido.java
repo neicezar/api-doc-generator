@@ -8,7 +8,7 @@ import java.util.List;
  */
 public record MetodoExtraido(
         String nome,
-        List<String> parametros,
+        List<ParametroExtraido> parametros,
         String tipoRetorno,
         List<String> anotacoes
 ) {

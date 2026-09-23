@@ -164,8 +164,12 @@ public class ExtratorDeCodigo {
     }
 
     private MetodoExtraido extrairMetodo(MethodDeclaration metodo) {
-        List<String> parametros = metodo.getParameters().stream()
-                .map(p -> p.getType().asString() + " " + p.getNameAsString())
+        List<ParametroExtraido> parametros = metodo.getParameters().stream()
+                .map(p -> new ParametroExtraido(
+                        p.getNameAsString(),
+                        p.getType().asString(),
+                        p.getAnnotations().stream().map(this::formatarAnotacao).toList()
+                ))
                 .toList();
 
         // Usa formatarAnotacao (não só o nome) para capturar o valor de

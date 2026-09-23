@@ -3,6 +3,7 @@ package com.neibarbosa.api_doc_generator.service.llm;
 import com.neibarbosa.api_doc_generator.extraction.CampoExtraido;
 import com.neibarbosa.api_doc_generator.extraction.ClasseExtraida;
 import com.neibarbosa.api_doc_generator.extraction.MetodoExtraido;
+import com.neibarbosa.api_doc_generator.extraction.ParametroExtraido;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -90,13 +91,28 @@ public class GeradorDeDocumentacaoService {
 
     private String formatarMetodos(List<MetodoExtraido> metodos) {
         return metodos.stream()
-                .map(m -> "%s(%s): %s %s".formatted(
-                        m.nome(),
-                        String.join(", ", m.parametros()),
-                        m.tipoRetorno(),
-                        m.anotacoes().isEmpty() ? "" : m.anotacoes()
-                ))
+                .map(this::formatarMetodo)
                 .collect(Collectors.joining("; "));
+    }
+
+    private String formatarMetodo(MetodoExtraido metodo) {
+        String parametros = metodo.parametros().stream()
+                .map(this::formatarParametro)
+                .collect(Collectors.joining(", "));
+
+        String anotacoes = metodo.anotacoes().isEmpty() ? "" : " " + metodo.anotacoes();
+
+        return "%s(%s): %s%s".formatted(
+                metodo.nome(), parametros, metodo.tipoRetorno(), anotacoes
+        );
+    }
+
+    private String formatarParametro(ParametroExtraido parametro) {
+        String anotacoes = parametro.anotacoes().isEmpty()
+                ? ""
+                : String.join(" ", parametro.anotacoes()) + " ";
+
+        return "%s%s %s".formatted(anotacoes, parametro.tipo(), parametro.nome());
     }
 
     /**
