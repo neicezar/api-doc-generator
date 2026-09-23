@@ -43,10 +43,24 @@ public class ExtratorDeCodigo {
             while ((entry = zis.getNextEntry()) != null) {
                 String nomeArquivo = entry.getName();
 
-                // Ignora diretórios, arquivos não-Java, e classes de teste
-                // (não interessam para a documentação da API pública).
-                boolean ehArquivoDeTeste = nomeArquivo.contains("/test/") || nomeArquivo.endsWith("Test.java");
-                if (entry.isDirectory() || !nomeArquivo.endsWith(".java") || ehArquivoDeTeste) {
+                // Ignora diretórios e arquivos não-Java
+                if (entry.isDirectory() || !nomeArquivo.endsWith(".java")) {
+                    continue;
+                }
+
+                // Ignora arquivos de infraestrutura de build — não fazem
+                // parte da API e não devem aparecer na documentação.
+                boolean ehArquivoDeInfra = nomeArquivo.contains("/.mvn/")
+                        || nomeArquivo.contains("/gradle/wrapper/")
+                        || nomeArquivo.endsWith("WrapperDownloader.java");
+
+                // Ignora classes de teste.
+                boolean ehArquivoDeTeste = nomeArquivo.contains("/test/")
+                        || nomeArquivo.endsWith("Test.java")
+                        || nomeArquivo.endsWith("Tests.java")
+                        || nomeArquivo.endsWith("IT.java");
+
+                if (ehArquivoDeInfra || ehArquivoDeTeste) {
                     continue;
                 }
 
