@@ -1,5 +1,7 @@
 package com.neibarbosa.api_doc_generator.extraction;
 
+import org.springframework.stereotype.Component;
+
 import java.util.List;
 import java.util.Set;
 
@@ -20,6 +22,7 @@ import java.util.Set;
  *    @Size, @Pattern, @Email) sem nenhum dos sinais acima — indício
  *    mais fraco de DTO, já que nem toda classe de validação é um record
  */
+@Component
 public class IdentificadorDeCamada {
 
     private static final Set<String> ANOTACOES_CONTROLLER = Set.of("RestController", "Controller");

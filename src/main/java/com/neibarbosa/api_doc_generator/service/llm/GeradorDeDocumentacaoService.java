@@ -19,10 +19,10 @@ import java.util.stream.Collectors;
  * REDUCE: os resumos (já compactos) são consolidados numa única
  * chamada final, que gera a documentação completa em Markdown.
  */
-
 @Service
 @RequiredArgsConstructor
 public class GeradorDeDocumentacaoService {
+
     private final LLMClient llmClient;
 
     public String gerarDocumentacao(String urlRepositorio, List<ClasseExtraida> classes) {
@@ -45,7 +45,15 @@ public class GeradorDeDocumentacaoService {
                 Resuma em no máximo 3 frases o que a classe Java abaixo faz,
                 de forma técnica e objetiva, para uso em documentação de API.
                 Não repita a assinatura, apenas explique o propósito.
-                
+
+                Regras obrigatórias:
+                - Baseie-se EXCLUSIVAMENTE nas informações fornecidas abaixo.
+                  Não invente métodos, campos ou comportamentos que não
+                  estejam listados.
+                - Responda APENAS com o resumo em si — sem saudação, sem
+                  introdução ("Claro!", "Aqui está...", etc.), sem comentário
+                  final, sem markdown de bloco de código.
+
                 Pacote: %s
                 Classe: %s
                 Camada identificada: %s
@@ -57,7 +65,6 @@ public class GeradorDeDocumentacaoService {
                 classe.camada(),
                 classe.anotacoesDeClasse(),
                 formatarMetodos(classe.metodos())
-
         );
 
         return "### %s (%s)\n%s".formatted(
@@ -70,25 +77,42 @@ public class GeradorDeDocumentacaoService {
                 .map(m -> "%s(%s): %s".formatted(m.nome(), String.join(", ", m.parametros()), m.tipoRetorno()))
                 .collect(Collectors.joining("; "));
     }
-        /**
-         * Etapa REDUCE: uma única chamada final, recebendo os resumos já
-         * compactados (não o código bruto de novo), pedindo a
-         * documentação consolidada do projeto inteiro.
-         */
-    private String reduzir(String urlRepositorio, List<String> resumos){
+
+    /**
+     * Etapa REDUCE: uma única chamada final, recebendo os resumos já
+     * compactados (não o código bruto de novo), pedindo a
+     * documentação consolidada do projeto inteiro.
+     */
+    private String reduzir(String urlRepositorio, List<String> resumos) {
         String prompt = """
                 Você é um gerador de documentação técnica de APIs.
                 Com base nos resumos de classes abaixo (extraídos do repositório %s),
                 gere uma documentação completa em Markdown com três seções:
-                
-                1. "## Visão Arquitetural" - como as camadas se relacionam
-                2. "## Guia de Endpoints" - endpoints expostos pelos controllers, se houver
-                3. "## Documentação Técnica" - detalhamento por classe
-                
-                
-                Resumos das classes:
+
+                1. "## Visão Arquitetural" — como as camadas se relacionam
+                2. "## Guia de Endpoints" — endpoints expostos pelos controllers, se houver
+                3. "## Documentação Técnica" — detalhamento por classe, uma
+                   subseção "### NomeDaClasse" para CADA classe listada abaixo
+
+                Regras obrigatórias:
+                - Use EXCLUSIVAMENTE as classes e informações listadas abaixo.
+                  Nunca invente classes, métodos ou endpoints que não estejam
+                  nos resumos — se a informação não foi fornecida, não a
+                  mencione, em vez de supor um exemplo genérico.
+                - Se os resumos parecerem insuficientes, documente o que der
+                  com as informações disponíveis; não substitua por um
+                  exemplo fictício de outra API.
+                - A resposta deve conter APENAS o Markdown da documentação,
+                  começando diretamente com "# Documentação Técnica — %s".
+                  Não inclua saudação, introdução, comentário final, nem
+                  envolva a resposta inteira em um bloco de código markdown
+                  (não use ``` no início/fim do documento).
+
+                Resumos das classes (%d classes no total):
                 %s
-                """.formatted(urlRepositorio, String.join("\n\n", resumos));
+                """.formatted(
+                urlRepositorio, urlRepositorio, resumos.size(), String.join("\n\n", resumos)
+        );
 
         return llmClient.gerarTexto(prompt);
     }
