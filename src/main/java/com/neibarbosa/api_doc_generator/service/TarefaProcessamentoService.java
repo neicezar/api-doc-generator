@@ -9,12 +9,15 @@ import com.neibarbosa.api_doc_generator.extraction.ExtratorDeCodigo;
 import com.neibarbosa.api_doc_generator.provedor.ProvedorLocator;
 import com.neibarbosa.api_doc_generator.provedor.ProvedorRepositorio;
 import com.neibarbosa.api_doc_generator.repository.TarefaRepository;
+import com.neibarbosa.api_doc_generator.service.llm.GeradorDeDocumentacaoService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -26,8 +29,8 @@ import java.util.stream.Collectors;
  * TarefaMensagemListener assim que uma mensagem chega na fila:
  *
  * baixar o repositório (ProvedorRepositorio) → extrair a estrutura
- * do código (ExtratorDeCodigo) → (Fase 5, ainda não implementada)
- * gerar a documentação via LLM.
+ * do código (ExtratorDeCodigo) → gerar a documentação via LLM
+ * (GeradorDeDocumentacaoService, map-reduce) → salvar o resultado.
  *
  * Cada etapa atualiza o status da Tarefa no banco, para que o
  * frontend consiga acompanhar o progresso.
@@ -41,6 +44,7 @@ public class TarefaProcessamentoService {
     private final TarefaRepository tarefaRepository;
     private final ProvedorLocator provedorLocator;
     private final ExtratorDeCodigo extratorDeCodigo;
+    private final GeradorDeDocumentacaoService geradorDeDocumentacaoService;
 
     public void processar(UUID codigo) {
         Tarefa tarefa = tarefaRepository.findByCodigo(codigo)
@@ -77,13 +81,35 @@ public class TarefaProcessamentoService {
                     "Extração concluída para tarefa {}: {} classes encontradas — {}",
                     tarefa.getCodigo(), classes.size(), contagemPorCamada
             );
+
+            String documentacao = geradorDeDocumentacaoService.gerarDocumentacao(
+                    tarefa.getUrlRepositorio(), classes
+            );
+
+            String caminhoArquivo = salvarDocumentacao(tarefa.getCodigo(), documentacao);
+
+            tarefa.setStatus(StatusTarefa.CONCLUIDO);
+            tarefa.setUrlArtefato(caminhoArquivo);
+            tarefa.setDataFim(LocalDateTime.now());
         }
 
-        // TODO (Fase 5): enviar `classes` para a LLM (map-reduce) e gerar
-        // a documentação final. Por enquanto, a tarefa permanece em
-        // EXTRAINDO — status CONCLUIDO só faz sentido quando a
-        // documentação de fato existir.
         tarefaRepository.save(tarefa);
+    }
+
+    /**
+     * Salva a documentação gerada em disco local. Um destino provisório
+     * — numa evolução futura do projeto, isso viraria um upload para
+     * armazenamento em nuvem (ex: AWS S3), com urlArtefato passando a
+     * ser uma URL pública em vez de um caminho de arquivo local.
+     */
+    private String salvarDocumentacao(UUID codigo, String conteudoMarkdown) throws Exception {
+        Path diretorio = Path.of("documentos-gerados");
+        Files.createDirectories(diretorio);
+
+        Path arquivo = diretorio.resolve(codigo + ".md");
+        Files.writeString(arquivo, conteudoMarkdown);
+
+        return arquivo.toAbsolutePath().toString();
     }
 
     /**
