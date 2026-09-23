@@ -44,13 +44,20 @@ public class GeradorDeDocumentacaoService {
 
     private String resumirClasse(ClasseExtraida classe) {
         String prompt = """
-                Resuma em no máximo 3 frases o que a classe Java abaixo faz,
-                de forma técnica e objetiva, para uso em documentação de API.
-                Não repita a assinatura, apenas explique o propósito.
+                Resuma de forma técnica e objetiva o que a classe Java abaixo
+                faz, para uso em documentação de API. Máximo de 4 frases.
                 Se a classe tiver campos listados abaixo, você já tem a
                 estrutura real dela — não diga que a estrutura "não foi
                 detalhada" ou algo do tipo, apenas descreva o que já foi
                 fornecido.
+
+                Importante: este resumo será usado depois para montar o guia
+                de endpoints e exemplos de requisição/resposta da API. Por
+                isso, PRESERVE os detalhes técnicos exatos que aparecem
+                abaixo — nomes e tipos dos campos, path das anotações de
+                mapping (ex: o "/greeting" dentro de GetMapping), nomes dos
+                parâmetros e seus valores padrão. Não os generalize nem os
+                omita no resumo.
 
                 Regras obrigatórias:
                 - Baseie-se EXCLUSIVAMENTE nas informações fornecidas abaixo.
@@ -127,23 +134,36 @@ public class GeradorDeDocumentacaoService {
                 gere uma documentação completa em Markdown com três seções:
 
                 1. "## Visão Arquitetural" — como as camadas se relacionam
-                2. "## Guia de Endpoints" — endpoints expostos pelos controllers, se houver
+                2. "## Guia de Endpoints" — para CADA endpoint exposto pelos
+                   controllers, documente:
+                   - método HTTP e path (ex: `GET /greeting`)
+                   - parâmetros aceitos, com nome, tipo, se é obrigatório e
+                     valor padrão quando houver
+                   - um exemplo de requisição
+                   - um exemplo de resposta em JSON, usando os campos reais
+                     do objeto retornado
                 3. "## Documentação Técnica" — detalhamento por classe, uma
-                   subseção "### NomeDaClasse" para CADA classe listada abaixo
+                   subseção "### NomeDaClasse" para CADA classe listada abaixo,
+                   incluindo seus campos (nome e tipo) quando houver
 
                 Regras obrigatórias:
                 - Use EXCLUSIVAMENTE as classes e informações listadas abaixo.
-                  Nunca invente classes, métodos ou endpoints que não estejam
-                  nos resumos — se a informação não foi fornecida, não a
-                  mencione, em vez de supor um exemplo genérico.
-                - Se os resumos parecerem insuficientes, documente o que der
-                  com as informações disponíveis; não substitua por um
-                  exemplo fictício de outra API.
+                  Nunca invente classes, métodos, campos ou endpoints que não
+                  estejam nos resumos.
+                - Sobre os exemplos: a ESTRUTURA deve ser sempre real (só os
+                  campos e parâmetros que existem de fato nos resumos); apenas
+                  os VALORES dentro dela podem ser ilustrativos e plausíveis.
+                  Nunca acrescente um campo ao exemplo que não exista na classe.
+                - Se não houver nenhum controller nos resumos, escreva na seção
+                  de endpoints que o repositório não expõe endpoints REST, em
+                  vez de inventar algum.
                 - A resposta deve conter APENAS o Markdown da documentação,
                   começando diretamente com "# Documentação Técnica — %s".
                   Não inclua saudação, introdução, comentário final, nem
                   envolva a resposta inteira em um bloco de código markdown
-                  (não use ``` no início/fim do documento).
+                  (não use ``` no início/fim do documento). Blocos de código
+                  para os exemplos de JSON/requisição são permitidos e
+                  esperados.
 
                 Resumos das classes (%d classes no total):
                 %s
