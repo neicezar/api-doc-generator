@@ -3,8 +3,9 @@ package com.neibarbosa.api_doc_generator.extraction;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.RecordDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -79,8 +80,9 @@ public class ExtratorDeCodigo {
                 .map(pd -> pd.getNameAsString())
                 .orElse("");
 
-        return unidadeCompilacao.findFirst(ClassOrInterfaceDeclaration.class).map(tipo -> {
+        return unidadeCompilacao.getPrimaryType().map(tipo -> {
             String nomeClasse = tipo.getNameAsString();
+            boolean ehRecord = tipo instanceof RecordDeclaration;
 
             List<String> anotacoesDeClasse = tipo.getAnnotations().stream()
                     .map(AnnotationExpr::getNameAsString)
@@ -92,7 +94,7 @@ public class ExtratorDeCodigo {
                     .anyMatch(identificadorDeCamada::ehAnotacaoDeValidacao);
 
             CamadaClasse camada = identificadorDeCamada.identificar(
-                    nomePacote, nomeClasse, anotacoesDeClasse, possuiCampoComValidacao
+                    nomePacote, nomeClasse, anotacoesDeClasse, ehRecord, possuiCampoComValidacao
             );
 
             List<MetodoExtraido> metodos = tipo.getMethods().stream()

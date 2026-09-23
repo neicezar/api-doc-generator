@@ -1,7 +1,5 @@
 package com.neibarbosa.api_doc_generator.extraction;
 
-import org.springframework.stereotype.Component;
-
 import java.util.List;
 import java.util.Set;
 
@@ -9,10 +7,20 @@ import java.util.Set;
  * Identifica a camada arquitetural de uma classe combinando múltiplos
  * sinais, do mais forte para o mais fraco — a mesma estratégia
  * definida no planejamento do projeto:
+ *
+ * 1. Anotações de camada (@RestController, @Service, @Entity, @Repository)
+ *    — sinal mais confiável, direto do framework
+ * 2. Nome do pacote (contém ".dto.", ".controller.", etc.)
+ * 3. Sufixo do nome da classe (Controller, Service, Repository, DTO,
+ *    Request, Response)
+ * 4. Ser um Java `record` — forte indício de DTO, já que records são
+ *    o padrão idiomático moderno para dados imutáveis (é literalmente
+ *    como modelamos nossos próprios CriarTarefaRequest/TarefaResponse)
+ * 5. Presença de anotações de validação nos campos (@NotBlank, @NotNull,
+ *    @Size, @Pattern, @Email) sem nenhum dos sinais acima — indício
+ *    mais fraco de DTO, já que nem toda classe de validação é um record
  */
-@Component
 public class IdentificadorDeCamada {
-
 
     private static final Set<String> ANOTACOES_CONTROLLER = Set.of("RestController", "Controller");
     private static final Set<String> ANOTACOES_SERVICE = Set.of("Service");
@@ -26,6 +34,7 @@ public class IdentificadorDeCamada {
             String nomePacote,
             String nomeClasse,
             List<String> anotacoesDeClasse,
+            boolean ehRecord,
             boolean possuiCampoComAnotacaoDeValidacao
     ) {
         // 1. Anotações — sinal mais forte
@@ -50,7 +59,10 @@ public class IdentificadorDeCamada {
             return CamadaClasse.DTO;
         }
 
-        // 4. Fallback: anotação de validação em campo, sem nenhum sinal acima
+        // 4. Ser um record, sem nenhum sinal acima
+        if (ehRecord) return CamadaClasse.DTO;
+
+        // 5. Fallback: anotação de validação em campo, sem nenhum sinal acima
         if (possuiCampoComAnotacaoDeValidacao) return CamadaClasse.DTO;
 
         return CamadaClasse.DESCONHECIDA;
