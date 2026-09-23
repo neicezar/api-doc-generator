@@ -80,30 +80,43 @@ public class ExtratorDeCodigo {
                 .map(pd -> pd.getNameAsString())
                 .orElse("");
 
-        return unidadeCompilacao.getPrimaryType().map(tipo -> {
-            String nomeClasse = tipo.getNameAsString();
-            boolean ehRecord = tipo instanceof RecordDeclaration;
+        List<TypeDeclaration<?>> tipos = unidadeCompilacao.getTypes();
+        if (tipos.isEmpty()) {
+            return Optional.empty();
+        }
 
-            List<String> anotacoesDeClasse = tipo.getAnnotations().stream()
-                    .map(AnnotationExpr::getNameAsString)
-                    .toList();
+        // Pega o primeiro tipo de nível superior do arquivo. Não depende
+        // de nome de arquivo/storage (ao contrário de getPrimaryType()),
+        // o que importa aqui porque parseamos a partir de uma String pura,
+        // sem nenhuma informação de path associada ao CompilationUnit.
+        TypeDeclaration<?> tipo = tipos.get(0);
 
-            boolean possuiCampoComValidacao = tipo.getFields().stream()
-                    .flatMap(campo -> campo.getAnnotations().stream())
-                    .map(AnnotationExpr::getNameAsString)
-                    .anyMatch(identificadorDeCamada::ehAnotacaoDeValidacao);
+        return Optional.of(extrairDados(tipo, nomePacote));
+    }
 
-            CamadaClasse camada = identificadorDeCamada.identificar(
-                    nomePacote, nomeClasse, anotacoesDeClasse, ehRecord, possuiCampoComValidacao
-            );
+    private ClasseExtraida extrairDados(TypeDeclaration<?> tipo, String nomePacote) {
+        String nomeClasse = tipo.getNameAsString();
+        boolean ehRecord = tipo instanceof RecordDeclaration;
 
-            List<MetodoExtraido> metodos = tipo.getMethods().stream()
-                    .filter(MethodDeclaration::isPublic)
-                    .map(this::extrairMetodo)
-                    .toList();
+        List<String> anotacoesDeClasse = tipo.getAnnotations().stream()
+                .map(AnnotationExpr::getNameAsString)
+                .toList();
 
-            return new ClasseExtraida(nomePacote, nomeClasse, camada, anotacoesDeClasse, metodos);
-        });
+        boolean possuiCampoComValidacao = tipo.getFields().stream()
+                .flatMap(campo -> campo.getAnnotations().stream())
+                .map(AnnotationExpr::getNameAsString)
+                .anyMatch(identificadorDeCamada::ehAnotacaoDeValidacao);
+
+        CamadaClasse camada = identificadorDeCamada.identificar(
+                nomePacote, nomeClasse, anotacoesDeClasse, ehRecord, possuiCampoComValidacao
+        );
+
+        List<MetodoExtraido> metodos = tipo.getMethods().stream()
+                .filter(MethodDeclaration::isPublic)
+                .map(this::extrairMetodo)
+                .toList();
+
+        return new ClasseExtraida(nomePacote, nomeClasse, camada, anotacoesDeClasse, metodos);
     }
 
     private MetodoExtraido extrairMetodo(MethodDeclaration metodo) {
