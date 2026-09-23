@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import java.util.stream.Collectors;
 
 /**
  * Lê o repositório compactado (stream vindo do ProvedorRepositorio,
@@ -102,6 +103,8 @@ public class ExtratorDeCodigo {
                 .map(AnnotationExpr::getNameAsString)
                 .toList();
 
+        List<CampoExtraido> campos = extrairCampos(tipo);
+
         boolean possuiCampoComValidacao = tipo.getFields().stream()
                 .flatMap(campo -> campo.getAnnotations().stream())
                 .map(AnnotationExpr::getNameAsString)
@@ -116,7 +119,28 @@ public class ExtratorDeCodigo {
                 .map(this::extrairMetodo)
                 .toList();
 
-        return new ClasseExtraida(nomePacote, nomeClasse, camada, anotacoesDeClasse, metodos);
+        return new ClasseExtraida(nomePacote, nomeClasse, camada, anotacoesDeClasse, campos, metodos);
+    }
+
+    /**
+     * Extrai os campos da classe — tratando records de forma diferente
+     * de classes comuns, porque no JavaParser os componentes de um
+     * record (ex: "record Greeting(long id, String content)") ficam
+     * guardados como parâmetros do record, não como FieldDeclaration
+     * no corpo, ao contrário de uma classe tradicional com campos
+     * declarados explicitamente.
+     */
+    private List<CampoExtraido> extrairCampos(TypeDeclaration<?> tipo) {
+        if (tipo instanceof RecordDeclaration record) {
+            return record.getParameters().stream()
+                    .map(p -> new CampoExtraido(p.getNameAsString(), p.getType().asString()))
+                    .toList();
+        }
+
+        return tipo.getFields().stream()
+                .flatMap(campo -> campo.getVariables().stream())
+                .map(variavel -> new CampoExtraido(variavel.getNameAsString(), variavel.getType().asString()))
+                .toList();
     }
 
     private MetodoExtraido extrairMetodo(MethodDeclaration metodo) {
@@ -124,8 +148,13 @@ public class ExtratorDeCodigo {
                 .map(p -> p.getType().asString() + " " + p.getNameAsString())
                 .toList();
 
+        // Usa formatarAnotacao (não só o nome) para capturar o valor de
+        // anotações de mapping, ex: "GetMapping(/greeting)" em vez de só
+        // "GetMapping" — essencial para o "Guia de Endpoints" da
+        // documentação final conseguir listar o path real, sem precisar
+        // que a LLM adivinhe.
         List<String> anotacoes = metodo.getAnnotations().stream()
-                .map(AnnotationExpr::getNameAsString)
+                .map(this::formatarAnotacao)
                 .toList();
 
         return new MetodoExtraido(
@@ -134,5 +163,21 @@ public class ExtratorDeCodigo {
                 metodo.getType().asString(),
                 anotacoes
         );
+    }
+
+    private String formatarAnotacao(AnnotationExpr anotacao) {
+        if (anotacao.isSingleMemberAnnotationExpr()) {
+            String valor = anotacao.asSingleMemberAnnotationExpr().getMemberValue().toString();
+            return "%s(%s)".formatted(anotacao.getNameAsString(), valor);
+        }
+
+        if (anotacao.isNormalAnnotationExpr()) {
+            String pares = anotacao.asNormalAnnotationExpr().getPairs().stream()
+                    .map(par -> "%s=%s".formatted(par.getNameAsString(), par.getValue().toString()))
+                    .collect(Collectors.joining(", "));
+            return "%s(%s)".formatted(anotacao.getNameAsString(), pares);
+        }
+
+        return anotacao.getNameAsString();
     }
 }

@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * Representação estruturada de uma classe/interface Java extraída do
  * repositório — o JSON compacto que será enviado à LLM no lugar do
- * código-fonte bruto (Fase 5), evitando estourar o contexto do
+ * código-fonte bruto, evitando estourar o contexto do
  * modelo com arquivos inteiros.
  */
 public record ClasseExtraida(
@@ -13,6 +13,7 @@ public record ClasseExtraida(
         String nomeClasse,
         CamadaClasse camada,
         List<String> anotacoesDeClasse,
+        List<CampoExtraido> campos,
         List<MetodoExtraido> metodos
 ) {
 }

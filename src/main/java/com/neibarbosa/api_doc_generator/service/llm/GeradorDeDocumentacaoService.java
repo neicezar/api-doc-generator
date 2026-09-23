@@ -1,5 +1,6 @@
 package com.neibarbosa.api_doc_generator.service.llm;
 
+import com.neibarbosa.api_doc_generator.extraction.CampoExtraido;
 import com.neibarbosa.api_doc_generator.extraction.ClasseExtraida;
 import com.neibarbosa.api_doc_generator.extraction.MetodoExtraido;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,10 @@ public class GeradorDeDocumentacaoService {
                 Resuma em no máximo 3 frases o que a classe Java abaixo faz,
                 de forma técnica e objetiva, para uso em documentação de API.
                 Não repita a assinatura, apenas explique o propósito.
+                Se a classe tiver campos listados abaixo, você já tem a
+                estrutura real dela — não diga que a estrutura "não foi
+                detalhada" ou algo do tipo, apenas descreva o que já foi
+                fornecido.
 
                 Regras obrigatórias:
                 - Baseie-se EXCLUSIVAMENTE nas informações fornecidas abaixo.
@@ -58,12 +63,14 @@ public class GeradorDeDocumentacaoService {
                 Classe: %s
                 Camada identificada: %s
                 Anotações: %s
+                Campos: %s
                 Métodos públicos: %s
                 """.formatted(
                 classe.nomePacote(),
                 classe.nomeClasse(),
                 classe.camada(),
                 classe.anotacoesDeClasse(),
+                formatarCampos(classe.campos()),
                 formatarMetodos(classe.metodos())
         );
 
@@ -72,9 +79,23 @@ public class GeradorDeDocumentacaoService {
         );
     }
 
+    private String formatarCampos(List<CampoExtraido> campos) {
+        if (campos.isEmpty()) {
+            return "(nenhum campo encontrado)";
+        }
+        return campos.stream()
+                .map(c -> "%s: %s".formatted(c.nome(), c.tipo()))
+                .collect(Collectors.joining(", "));
+    }
+
     private String formatarMetodos(List<MetodoExtraido> metodos) {
         return metodos.stream()
-                .map(m -> "%s(%s): %s".formatted(m.nome(), String.join(", ", m.parametros()), m.tipoRetorno()))
+                .map(m -> "%s(%s): %s %s".formatted(
+                        m.nome(),
+                        String.join(", ", m.parametros()),
+                        m.tipoRetorno(),
+                        m.anotacoes().isEmpty() ? "" : m.anotacoes()
+                ))
                 .collect(Collectors.joining("; "));
     }
 
