@@ -1,0 +1,50 @@
+<div class="resultado-wrapper">
+  <div class="resultado-header">
+    <div class="header-info">
+      <div class="success-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Documentação gerada
+      </div>
+      <h2 class="repo-titulo">{{ nomeRepositorio() }}</h2>
+    </div>
+
+    <div class="acoes">
+      <button class="btn-secundario" (click)="copiar()">
+        @if (copiado) {
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Copiado!
+        } @else {
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Copiar
+        }
+      </button>
+
+      <button class="btn-primario" (click)="download()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Baixar .md
+      </button>
+
+      <button class="btn-fantasma" (click)="reiniciar.emit()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 .49-3.99"/>
+        </svg>
+        Novo
+      </button>
+    </div>
+  </div>
+
+  <div class="markdown-container">
+    <markdown [data]="conteudo" class="markdown-body"></markdown>
+  </div>
+</div>
